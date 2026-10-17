@@ -1,0 +1,234 @@
+// Prisma schema for Direct-Selling Management PWA
+// Compatible with SQLite for local development and PostgreSQL for Supabase production.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String     @id @default(uuid())
+  name           String
+  email          String     @unique
+  phone          String?
+  passwordHash   String
+  role           String     @default("ADMIN") // "ADMIN" | "STAFF"
+  isActive       Boolean    @default(true)
+  failedAttempts Int        @default(0)
+  lockoutUntil   DateTime?
+  lastLoginAt    DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  auditLogs      AuditLog[]
+
+  @@index([email])
+}
+
+model DirectSeller {
+  id          String       @id @default(uuid())
+  dsCode      String       @unique // E.g., DS1001
+  name        String
+  phone       String
+  address     String?
+  city        String?
+  joiningDate DateTime     @default(now())
+  category    String       @default("SAO") // "SAO" | "SGO"
+  uplineCode  String?
+  status      String       @default("ACTIVE") // "ACTIVE" | "INACTIVE"
+  notes       String?
+  isDeleted   Boolean      @default(false)
+  deletedAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  orders      Order[]
+  followUps   FollowUp[]
+
+  @@index([dsCode])
+  @@index([phone])
+  @@index([category])
+  @@index([status])
+}
+
+model Customer {
+  id        String     @id @default(uuid())
+  name      String
+  phone     String
+  address   String?
+  city      String?
+  notes     String?
+  isDeleted Boolean    @default(false)
+  deletedAt DateTime?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  orders    Order[]
+  followUps FollowUp[]
+
+  @@index([phone])
+  @@index([name])
+}
+
+model Product {
+  id           String          @id @default(uuid())
+  name         String
+  sku          String          @unique
+  category     String          @default("WELLNESS")
+  mrp          Float           // Maximum Retail Price (₹)
+  dp           Float           // Distributor Price (₹)
+  currentStock Int             @default(0)
+  reorderLevel Int             @default(5)
+  batchNumber  String?
+  expiryDate   DateTime?
+  isDeleted    Boolean         @default(false)
+  deletedAt    DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  stockMovements StockMovement[]
+  orderItems     OrderItem[]
+  followUps      FollowUp[]
+
+  @@index([sku])
+  @@index([name])
+  @@index([category])
+}
+
+model StockMovement {
+  id            String   @id @default(uuid())
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type          String   // "IN" | "OUT" | "ADJUSTMENT" | "SALE" | "CANCEL_REVERSAL"
+  quantity      Int
+  previousStock Int
+  newStock      Int
+  referenceType String   // "ORDER" | "UPLOAD" | "MANUAL"
+  referenceId   String?  // e.g. orderId or batch upload ID
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@index([productId])
+  @@index([createdAt])
+}
+
+model Order {
+  id             String      @id @default(uuid())
+  orderNumber    String      @unique // E.g., INV-2026-0001
+  orderDate      DateTime    @default(now())
+  orderType      String      // "CUSTOMER" | "DS"
+  customerId     String?
+  customer       Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  directSellerId String?
+  directSeller   DirectSeller? @relation(fields: [directSellerId], references: [id], onDelete: SetNull)
+  rateType       String      @default("MRP") // "MRP" | "DP"
+  subtotal       Float       @default(0)
+  discount       Float       @default(0)
+  totalAmount    Float       @default(0)
+  paymentStatus  String      @default("PAID") // "PAID" | "PARTIAL" | "PENDING"
+  amountPaid     Float       @default(0)
+  isCancelled    Boolean     @default(false)
+  cancelledAt    DateTime?
+  notes          String?
+  isDeleted      Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  items          OrderItem[]
+
+  @@index([orderNumber])
+  @@index([orderDate])
+  @@index([orderType])
+  @@index([paymentStatus])
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitRate  Float
+  lineTotal Float
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model FollowUp {
+  id               String       @id @default(uuid())
+  type             String       @default("PRODUCT") // "PRODUCT" | "DS"
+  personType       String       @default("CUSTOMER") // "CUSTOMER" | "DS"
+  directSellerId   String?
+  directSeller     DirectSeller? @relation(fields: [directSellerId], references: [id], onDelete: SetNull)
+  customerId       String?
+  customer         Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  productId        String?
+  product          Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  followUpDate     DateTime
+  notes            String?
+  status           String       @default("PENDING") // "PENDING" | "FOLLOWED_UP" | "RESCHEDULED"
+  followedUpAt     DateTime?
+  nextFollowUpDate DateTime?
+  isDeleted        Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  messageLogs      MessageLog[]
+
+  @@index([followUpDate])
+  @@index([status])
+  @@index([type])
+}
+
+model MessageTemplate {
+  id        String       @id @default(uuid())
+  name      String
+  type      String       @default("GENERAL") // "PRODUCT_FOLLOWUP" | "DS_FOLLOWUP" | "ORDER_RECEIPT" | "STOCK_ALERT" | "GENERAL"
+  content   String       // Supports placeholders: {name}, {product}, {date}, {ds_code}, {amount}, {order_number}
+  isDefault Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  logs      MessageLog[]
+}
+
+model MessageLog {
+  id             String           @id @default(uuid())
+  followUpId     String?
+  followUp       FollowUp?        @relation(fields: [followUpId], references: [id], onDelete: SetNull)
+  recipientName  String
+  recipientPhone String
+  channel        String           @default("WHATSAPP_LINK") // "WHATSAPP_LINK" | "WHATSAPP_API" | "SMS_MSG91"
+  templateId     String?
+  template       MessageTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  messageText    String
+  status         String           @default("SENT") // "SENT" | "CLICKED" | "FAILED"
+  sentAt         DateTime         @default(now())
+  createdAt      DateTime         @default(now())
+
+  @@index([recipientPhone])
+  @@index([sentAt])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String   // "CREATE" | "UPDATE" | "DELETE" | "IMPORT" | "EXPORT" | "STOCK_UPDATE"
+  entity    String   // "DS" | "PRODUCT" | "ORDER" | "FOLLOWUP" | "AUTH"
+  entityId  String?
+  details   String?  // JSON formatted details
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([entity])
+  @@index([action])
+  @@index([createdAt])
+}

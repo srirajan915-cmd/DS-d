@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="dsGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="50%" stop-color="#0d9488" />
+      <stop offset="100%" stop-color="#4f46e5" />
+    </linearGradient>
+    <filter id="shadow512" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000" flood-opacity="0.35" />
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="110" fill="url(#dsGrad512)" />
+  <g filter="url(#shadow512)">
+    <circle cx="256" cy="256" r="170" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-width="4" stroke-opacity="0.35"/>
+    <text x="256" y="298" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="140" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="-3">DS</text>
+  </g>
+</svg>
