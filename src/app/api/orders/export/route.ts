@@ -40,23 +40,30 @@ export async function GET(request: NextRequest) {
         .join("; ");
 
       const balanceDue = Math.max(0, o.totalAmount - o.amountPaid);
+      const orderTypeDisplay =
+        o.orderType === "TAKEN_FROM_DS"
+          ? "Taken from DS"
+          : o.orderType === "DS"
+          ? "DS Sale"
+          : "Customer Retail";
 
       return {
         "S.No": index + 1,
         "Order Number": o.orderNumber,
         "Date": formatDateIST(o.orderDate),
-        "Order Type": o.orderType,
-        "Recipient Name": recipientName || "-",
+        "Order Type": orderTypeDisplay,
+        "Recipient / DS Name": recipientName || "-",
         "Phone": recipientPhone || "-",
         "Rate Applied": o.rateType,
         "Subtotal (₹)": o.subtotal,
         "Discount (₹)": o.discount,
         "Total Amount (₹)": o.totalAmount,
-        "Payment Status": o.paymentStatus,
+        "Status": o.paymentStatus,
         "Amount Paid (₹)": o.amountPaid,
         "Balance Due (₹)": balanceDue,
+        "Closed Date": o.closedAt ? formatDateIST(o.closedAt) : "-",
         "Cancelled": o.isCancelled ? "YES" : "NO",
-        "Products Purchased": itemsSummary,
+        "Products Details": itemsSummary,
         "Notes": o.notes || "-",
       };
     });

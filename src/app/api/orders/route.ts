@@ -10,7 +10,7 @@ const orderItemSchema = z.object({
 });
 
 const createOrderSchema = z.object({
-  orderType: z.enum(["CUSTOMER", "DS"]),
+  orderType: z.enum(["CUSTOMER", "DS", "TAKEN_FROM_DS"]),
   customerId: z.string().optional().nullable(),
   customerData: z
     .object({
@@ -25,9 +25,10 @@ const createOrderSchema = z.object({
   orderDate: z.string().optional().nullable(),
   rateType: z.enum(["MRP", "DP"]).default("MRP"),
   discount: z.number().min(0).default(0),
-  paymentStatus: z.enum(["PAID", "PARTIAL", "PENDING"]).default("PAID"),
+  paymentStatus: z.enum(["PAID", "PARTIAL", "PENDING", "BALANCE", "CLOSED"]).default("PAID"),
   amountPaid: z.number().min(0).default(0),
   notes: z.string().optional().nullable(),
+  addStockToInventory: z.boolean().default(true),
   items: z.array(orderItemSchema).min(1, "At least one product line item is required"),
 });
 
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const orderType = searchParams.get("orderType") || "ALL"; // ALL | CUSTOMER | DS
+  const orderType = searchParams.get("orderType") || "ALL"; // ALL | CUSTOMER | DS | TAKEN_FROM_DS
   const paymentStatus = searchParams.get("paymentStatus") || "ALL";
   const search = searchParams.get("search") || "";
   const page = parseInt(searchParams.get("page") || "1", 10);
@@ -90,13 +91,29 @@ export async function GET(request: NextRequest) {
     let customerRevenue = 0;
     let dsRevenue = 0;
     let pendingReceivables = 0;
+    let takenFromDsCount = 0;
+    let takenFromDsBalanceCount = 0;
+    let takenFromDsBalanceValue = 0;
 
     allOrders.forEach((o) => {
-      totalRevenue += o.totalAmount;
-      if (o.orderType === "CUSTOMER") customerRevenue += o.totalAmount;
-      if (o.orderType === "DS") dsRevenue += o.totalAmount;
-      if (o.paymentStatus !== "PAID") {
-        pendingReceivables += Math.max(0, o.totalAmount - o.amountPaid);
+      if (o.orderType === "CUSTOMER") {
+        totalRevenue += o.totalAmount;
+        customerRevenue += o.totalAmount;
+        if (o.paymentStatus !== "PAID") {
+          pendingReceivables += Math.max(0, o.totalAmount - o.amountPaid);
+        }
+      } else if (o.orderType === "DS") {
+        totalRevenue += o.totalAmount;
+        dsRevenue += o.totalAmount;
+        if (o.paymentStatus !== "PAID") {
+          pendingReceivables += Math.max(0, o.totalAmount - o.amountPaid);
+        }
+      } else if (o.orderType === "TAKEN_FROM_DS") {
+        takenFromDsCount++;
+        if (o.paymentStatus === "BALANCE") {
+          takenFromDsBalanceCount++;
+          takenFromDsBalanceValue += o.totalAmount;
+        }
       }
     });
 
@@ -130,6 +147,9 @@ export async function GET(request: NextRequest) {
         customerRevenue,
         dsRevenue,
         pendingReceivables,
+        takenFromDsCount,
+        takenFromDsBalanceCount,
+        takenFromDsBalanceValue,
         orderCount: allOrders.length,
       },
     });
@@ -179,15 +199,20 @@ export async function POST(request: NextRequest) {
       if (!customerId) {
         return NextResponse.json({ error: "Customer details are required for customer sales." }, { status: 400 });
       }
-    } else if (validated.orderType === "DS") {
+    } else if (validated.orderType === "DS" || validated.orderType === "TAKEN_FROM_DS") {
       if (!directSellerId) {
-        return NextResponse.json({ error: "Direct Seller selection is required for DS sales." }, { status: 400 });
+        return NextResponse.json(
+          { error: "Direct Seller selection is required." },
+          { status: 400 }
+        );
       }
     }
 
-    // Atomic transaction for order creation, stock verification & deduction
+    const isTakenFromDs = validated.orderType === "TAKEN_FROM_DS";
+
+    // Atomic transaction for order creation, stock verification & deduction/addition
     const orderResult = await prisma.$transaction(async (tx) => {
-      // 1. Verify stock for each item
+      // 1. Verify products for each item
       const productIds = validated.items.map((i) => i.productId);
       const products = await tx.product.findMany({
         where: { id: { in: productIds }, isDeleted: false },
@@ -209,7 +234,8 @@ export async function POST(request: NextRequest) {
           throw new Error(`Product with ID '${item.productId}' not found or inactive.`);
         }
 
-        if (prod.currentStock < item.quantity) {
+        // For regular sales, verify current stock
+        if (!isTakenFromDs && prod.currentStock < item.quantity) {
           throw new Error(
             `Insufficient stock for '${prod.name}'. Requested ${item.quantity}, but only ${prod.currentStock} units available.`
           );
@@ -230,18 +256,23 @@ export async function POST(request: NextRequest) {
       const totalAmount = Math.max(0, subtotal - discount);
 
       let amountPaid = validated.amountPaid;
-      if (validated.paymentStatus === "PAID") {
+      if (isTakenFromDs) {
+        amountPaid = validated.paymentStatus === "CLOSED" ? totalAmount : 0;
+      } else if (validated.paymentStatus === "PAID") {
         amountPaid = totalAmount;
-      } else if (validated.paymentStatus === "PENDING") {
+      } else if (validated.paymentStatus === "PENDING" || validated.paymentStatus === "BALANCE") {
         amountPaid = 0;
       }
 
-      // 2. Generate unique order number
+      // 2. Generate unique order number (TK- for taken, ORD- for sales)
       const countToday = await tx.order.count();
-      const orderNumber = `ORD-${new Date().getFullYear()}-${String(countToday + 1).padStart(4, "0")}`;
+      const orderNumber = isTakenFromDs
+        ? `TK-${new Date().getFullYear()}-${String(countToday + 1).padStart(4, "0")}`
+        : `ORD-${new Date().getFullYear()}-${String(countToday + 1).padStart(4, "0")}`;
 
       // 3. Create Order
       const orderDate = validated.orderDate ? new Date(validated.orderDate) : new Date();
+      const closedAt = isTakenFromDs && validated.paymentStatus === "CLOSED" ? new Date() : null;
 
       const createdOrder = await tx.order.create({
         data: {
@@ -256,11 +287,12 @@ export async function POST(request: NextRequest) {
           totalAmount,
           paymentStatus: validated.paymentStatus,
           amountPaid,
+          closedAt,
           notes: validated.notes || null,
         },
       });
 
-      // 4. Create OrderItems & Deduct Stock with Movements
+      // 4. Create OrderItems & Adjust Stock with Movements
       for (const vItem of verifiedItems) {
         await tx.orderItem.create({
           data: {
@@ -272,28 +304,54 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        // Deduct product stock
-        const prevStock = vItem.product.currentStock;
-        const newStock = prevStock - vItem.quantity;
+        if (isTakenFromDs) {
+          // If Taken from DS and user opted to add to inventory
+          if (validated.addStockToInventory) {
+            const prevStock = vItem.product.currentStock;
+            const newStock = prevStock + vItem.quantity;
 
-        await tx.product.update({
-          where: { id: vItem.product.id },
-          data: { currentStock: newStock },
-        });
+            await tx.product.update({
+              where: { id: vItem.product.id },
+              data: { currentStock: newStock },
+            });
 
-        // Log stock movement
-        await tx.stockMovement.create({
-          data: {
-            productId: vItem.product.id,
-            type: "SALE",
-            quantity: vItem.quantity,
-            previousStock: prevStock,
-            newStock,
-            referenceType: "ORDER",
-            referenceId: createdOrder.id,
-            notes: `Sale Order #${orderNumber} (${validated.orderType})`,
-          },
-        });
+            await tx.stockMovement.create({
+              data: {
+                productId: vItem.product.id,
+                type: "IN",
+                quantity: vItem.quantity,
+                previousStock: prevStock,
+                newStock,
+                referenceType: "TAKEN_FROM_DS",
+                referenceId: createdOrder.id,
+                notes: `Received/Taken from Direct Seller (Voucher #${orderNumber})`,
+              },
+            });
+          }
+        } else {
+          // Regular Sale: Deduct product stock
+          const prevStock = vItem.product.currentStock;
+          const newStock = prevStock - vItem.quantity;
+
+          await tx.product.update({
+            where: { id: vItem.product.id },
+            data: { currentStock: newStock },
+          });
+
+          // Log stock movement
+          await tx.stockMovement.create({
+            data: {
+              productId: vItem.product.id,
+              type: "SALE",
+              quantity: vItem.quantity,
+              previousStock: prevStock,
+              newStock,
+              referenceType: "ORDER",
+              referenceId: createdOrder.id,
+              notes: `Sale Order #${orderNumber} (${validated.orderType})`,
+            },
+          });
+        }
       }
 
       // 5. Audit log
@@ -308,6 +366,7 @@ export async function POST(request: NextRequest) {
             totalAmount,
             orderType: validated.orderType,
             itemsCount: verifiedItems.length,
+            status: validated.paymentStatus,
           }),
         },
       });
