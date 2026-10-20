@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: direct-sell-pro
+    runtime: node
+    plan: free
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        value: direct-sell-master-secret-key-32chars-secure-2026-pwa
+      - key: DATABASE_URL
+        value: file:./dev.db
+      - key: NEXT_PUBLIC_APP_NAME
+        value: DirectSell Pro
+      - key: NEXT_PUBLIC_DEFAULT_CURRENCY
+        value: INR
+      - key: NEXT_PUBLIC_DEFAULT_TIMEZONE
+        value: Asia/Kolkata
