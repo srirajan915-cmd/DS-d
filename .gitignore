@@ -33,11 +33,13 @@ yarn-error.log*
 # env files
 .env*
 !.env.example
+!.env.production
 
 # sqlite dev database
 *.db
 *.db-journal
 prisma/*.db
+!prisma/dev.db
 prisma/*.db-journal
 
 # vercel
