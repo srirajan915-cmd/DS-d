@@ -7,20 +7,24 @@ async function main() {
   console.log("🌱 Starting seed...");
 
   // 1. Seed Admin User
-  const adminPasswordHash = await bcrypt.hash("admin123", 10);
+  const adminPasswordHash = await bcrypt.hash("Tycoonssk@2008", 10);
   const admin = await prisma.user.upsert({
-    where: { email: "admin@directsell.com" },
-    update: {},
+    where: { email: "srirajan915@gmail.com" },
+    update: {
+      name: "Sri Rajan",
+      phone: "8015123605",
+      passwordHash: adminPasswordHash,
+    },
     create: {
-      name: "Admin Owner",
-      email: "admin@directsell.com",
-      phone: "9876543210",
+      name: "Sri Rajan",
+      email: "srirajan915@gmail.com",
+      phone: "8015123605",
       passwordHash: adminPasswordHash,
       role: "ADMIN",
       isActive: true,
     },
   });
-  console.log(`✓ Admin user ready: ${admin.email} (Password: admin123)`);
+  console.log(`✓ Admin user ready: ${admin.email}`);
 
   // 2. Seed Sample Direct Sellers
   const directSellers = [
