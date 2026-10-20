@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 
 export async function POST(request: NextRequest) {
   try {
-    const { identifier, newPassword } = await request.json();
+    const { identifier, newPassword, recoveryKey } = await request.json();
 
     if (!identifier || !newPassword) {
       return NextResponse.json(
@@ -17,6 +17,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Password must be at least 6 characters long." },
         { status: 400 }
+      );
+    }
+
+    const serverMasterKey = process.env.ADMIN_RECOVERY_KEY || process.env.JWT_SECRET || "direct-sell-master-secret-key-32chars-secure-2026-pwa";
+
+    if (!recoveryKey || recoveryKey.trim() !== serverMasterKey.trim()) {
+      return NextResponse.json(
+        { error: "Access Denied: Invalid Master Security Recovery Key. Password reset is restricted to the authorized system owner." },
+        { status: 403 }
       );
     }
 
