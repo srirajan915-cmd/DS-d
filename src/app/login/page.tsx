@@ -10,9 +10,11 @@ import {
   ShieldCheck,
   AlertCircle,
   CheckCircle2,
-  Sparkles,
   KeyRound,
   ArrowRight,
+  User,
+  Phone,
+  UserCog,
 } from "lucide-react";
 
 function LoginForm() {
@@ -36,6 +38,18 @@ function LoginForm() {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotSuccess, setForgotSuccess] = useState("");
   const [forgotError, setForgotError] = useState("");
+
+  // Custom Admin Setup modal state
+  const [showSetupModal, setShowSetupModal] = useState(false);
+  const [setupName, setSetupName] = useState("");
+  const [setupEmail, setSetupEmail] = useState("");
+  const [setupPhone, setSetupPhone] = useState("");
+  const [setupPassword, setSetupPassword] = useState("");
+  const [setupConfirmPassword, setSetupConfirmPassword] = useState("");
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [setupSuccess, setSetupSuccess] = useState("");
+  const [setupError, setSetupError] = useState("");
+  const [showSetupPassword, setShowSetupPassword] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,10 +88,55 @@ function LoginForm() {
     }
   };
 
-  const handleFillDemo = () => {
-    setIdentifier("admin@directsell.com");
-    setPassword("admin123");
-    setErrorMsg("");
+  const handleSetupAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!setupName.trim() || !setupEmail.trim() || !setupPhone.trim() || !setupPassword) {
+      setSetupError("Please fill in all fields.");
+      return;
+    }
+    if (setupPassword.length < 6) {
+      setSetupError("Password must be at least 6 characters.");
+      return;
+    }
+    if (setupPassword !== setupConfirmPassword) {
+      setSetupError("Passwords do not match.");
+      return;
+    }
+
+    setSetupLoading(true);
+    setSetupError("");
+    setSetupSuccess("");
+
+    try {
+      const res = await fetch("/api/auth/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: setupName.trim(),
+          email: setupEmail.trim().toLowerCase(),
+          phone: setupPhone.trim(),
+          password: setupPassword,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setSetupError(data.error || "Failed to update admin details.");
+      } else {
+        setSetupSuccess("Admin details updated successfully! Updating login credentials...");
+        setIdentifier(setupEmail.trim().toLowerCase());
+        setPassword(setupPassword);
+        setErrorMsg("");
+        setTimeout(() => {
+          setShowSetupModal(false);
+          setSetupSuccess("");
+        }, 1500);
+      }
+    } catch {
+      setSetupError("Network error. Please try again.");
+    } finally {
+      setSetupLoading(false);
+    }
   };
 
   const handleResetPassword = async (e: React.FormEvent) => {
@@ -134,16 +193,6 @@ function LoginForm() {
         </p>
       </div>
 
-      {/* Demo credentials quick button */}
-      <button
-        type="button"
-        onClick={handleFillDemo}
-        className="w-full mb-6 py-2.5 px-3 bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-700/50 rounded-xl text-xs font-semibold text-emerald-300 flex items-center justify-center gap-2 transition group cursor-pointer"
-      >
-        <Sparkles className="w-3.5 h-3.5 text-emerald-400 group-hover:rotate-12 transition-transform" />
-        <span>Click to autofill Demo Admin (admin@directsell.com / admin123)</span>
-      </button>
-
       {/* Error message */}
       {errorMsg && (
         <div className="mb-5 p-3.5 bg-rose-950/80 border border-rose-800/80 rounded-xl text-rose-200 text-xs sm:text-sm flex items-start gap-2.5 animate-in fade-in duration-200">
@@ -167,7 +216,7 @@ function LoginForm() {
               type="text"
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
-              placeholder="admin@directsell.com or 9876543210"
+              placeholder="Email or phone number"
               required
               className="w-full pl-10 pr-4 py-2.5 bg-slate-950/60 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
             />
@@ -239,6 +288,21 @@ function LoginForm() {
             </>
           )}
         </button>
+
+        <div className="pt-2 text-center">
+          <button
+            type="button"
+            onClick={() => {
+              setSetupError("");
+              setSetupSuccess("");
+              setShowSetupModal(true);
+            }}
+            className="text-xs text-emerald-400 hover:text-emerald-300 font-medium inline-flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <UserCog className="w-3.5 h-3.5" />
+            <span>Set or Change Admin Details</span>
+          </button>
+        </div>
       </form>
 
       {/* Security badge footer */}
@@ -288,7 +352,7 @@ function LoginForm() {
                     type="text"
                     value={forgotIdentifier}
                     onChange={(e) => setForgotIdentifier(e.target.value)}
-                    placeholder="admin@directsell.com"
+                    placeholder="Registered email or phone"
                     required
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:ring-1 focus:ring-emerald-500"
                   />
@@ -320,6 +384,157 @@ function LoginForm() {
                     className="flex-1 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition disabled:opacity-50 cursor-pointer"
                   >
                     {forgotLoading ? "Resetting..." : "Save New Password"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Custom Admin Setup Modal */}
+      {showSetupModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+              <div className="flex items-center gap-2">
+                <UserCog className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-bold text-sm text-white">Set Custom Admin Details</h3>
+              </div>
+              <button
+                onClick={() => setShowSetupModal(false)}
+                className="text-slate-400 hover:text-white text-xs cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+
+            {setupSuccess ? (
+              <div className="p-4 bg-emerald-950/80 border border-emerald-800 rounded-xl text-emerald-200 text-xs flex items-center gap-2.5">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                <span>{setupSuccess}</span>
+              </div>
+            ) : (
+              <form onSubmit={handleSetupAdmin} className="space-y-3.5">
+                <p className="text-xs text-slate-400">
+                  Set your personal name, email, phone number, and password to manage DirectSell.
+                </p>
+
+                {setupError && (
+                  <div className="p-2.5 bg-rose-950/80 border border-rose-800 rounded-lg text-rose-200 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>{setupError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Your Full Name</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="text"
+                      value={setupName}
+                      onChange={(e) => setSetupName(e.target.value)}
+                      placeholder="e.g. Sri Rajan"
+                      required
+                      className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Your Email Address</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                      <Mail className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="email"
+                      value={setupEmail}
+                      onChange={(e) => setSetupEmail(e.target.value)}
+                      placeholder="e.g. yourname@example.com"
+                      required
+                      className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Your Phone Number</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                      <Phone className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="tel"
+                      value={setupPhone}
+                      onChange={(e) => setSetupPhone(e.target.value)}
+                      placeholder="e.g. 9876543210"
+                      required
+                      className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Password</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                        <Lock className="w-4 h-4" />
+                      </div>
+                      <input
+                        type={showSetupPassword ? "text" : "password"}
+                        value={setupPassword}
+                        onChange={(e) => setSetupPassword(e.target.value)}
+                        placeholder="Min 6 chars"
+                        required
+                        className="w-full pl-9 pr-8 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:ring-1 focus:ring-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSetupPassword(!showSetupPassword)}
+                        className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-white cursor-pointer"
+                      >
+                        {showSetupPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Confirm Password</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                        <Lock className="w-4 h-4" />
+                      </div>
+                      <input
+                        type={showSetupPassword ? "text" : "password"}
+                        value={setupConfirmPassword}
+                        onChange={(e) => setSetupConfirmPassword(e.target.value)}
+                        placeholder="Confirm password"
+                        required
+                        className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:ring-1 focus:ring-emerald-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowSetupModal(false)}
+                    className="flex-1 py-2 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={setupLoading}
+                    className="flex-1 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition disabled:opacity-50 cursor-pointer"
+                  >
+                    {setupLoading ? "Saving..." : "Save Admin Details"}
                   </button>
                 </div>
               </form>

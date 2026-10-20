@@ -7,7 +7,7 @@ const JWT_SECRET = new TextEncoder().encode(JWT_SECRET_STRING);
 const COOKIE_NAME = "direct_sell_session";
 
 // Public paths that do not require authentication
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/forgot-password", "/favicon.ico", "/manifest.json"];
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/forgot-password", "/api/auth/setup", "/favicon.ico", "/manifest.json"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

@@ -103,7 +103,7 @@ async function runTestSuite() {
   console.log("\n\x1b[34m[Suite 6: Database Integrity & Invariants]\x1b[0m");
   try {
     // Check Admin user
-    const admin = await prisma.user.findUnique({ where: { email: "admin@directsell.com" } });
+    const admin = await prisma.user.findFirst({ where: { role: "ADMIN", deletedAt: null } });
     assert(admin !== null, "Admin user exists in database");
     assert(admin?.role === "ADMIN", "Admin has ADMIN role");
 
