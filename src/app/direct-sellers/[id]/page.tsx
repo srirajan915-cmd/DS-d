@@ -23,6 +23,7 @@ import {
 import { formatDateIST, formatINR, getWhatsAppUrl } from "@/lib/utils";
 import { useToast } from "@/components/providers/ToastProvider";
 import { AddEditDSModal } from "@/components/direct-sellers/AddEditDSModal";
+import { getStoredDSEdits } from "@/lib/clientStore";
 
 export default function DirectSellerDetailPage() {
   const params = useParams();
@@ -43,7 +44,9 @@ export default function DirectSellerDetailPage() {
       const res = await fetch(`/api/direct-sellers/${id}`);
       const data = await res.json();
       if (res.ok) {
-        setDs(data.ds);
+        const edits = getStoredDSEdits();
+        const mergedDs = edits[id] ? { ...data.ds, ...edits[id] } : data.ds;
+        setDs(mergedDs);
         setDownlines(data.downlines || []);
       } else {
         error(data.error || "Failed to load Direct Seller");

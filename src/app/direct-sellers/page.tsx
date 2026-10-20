@@ -25,6 +25,7 @@ import { AddEditDSModal } from "@/components/direct-sellers/AddEditDSModal";
 import { ImportDSModal } from "@/components/direct-sellers/ImportDSModal";
 import { useToast } from "@/components/providers/ToastProvider";
 import { formatDateIST, getWhatsAppUrl } from "@/lib/utils";
+import { applyStoredDS, saveDSDeleted, syncLocalDSToServer } from "@/lib/clientStore";
 
 interface DirectSeller {
   id: string;
@@ -75,9 +76,15 @@ export default function DirectSellersPage() {
       const data = await res.json();
 
       if (res.ok) {
-        setItems(data.items || []);
-        setPagination(data.pagination || { page: 1, pageSize: 10, total: 0, totalPages: 1 });
-        setCounts(data.counts || { all: 0, sao: 0, sgo: 0 });
+        const merged = applyStoredDS(data.items || []);
+        setItems(merged);
+        setPagination(data.pagination || { page: 1, pageSize: 10, total: merged.length, totalPages: 1 });
+        setCounts({
+          all: merged.length,
+          sao: merged.filter((i) => i.category === "SAO").length,
+          sgo: merged.filter((i) => i.category === "SGO").length,
+        });
+        syncLocalDSToServer().catch(() => {});
       } else {
         error(data.error || "Failed to load Direct Sellers");
       }
@@ -93,6 +100,7 @@ export default function DirectSellersPage() {
   }, [fetchDirectSellers]);
 
   const handleDelete = async (id: string) => {
+    saveDSDeleted(id);
     try {
       const res = await fetch(`/api/direct-sellers/${id}`, { method: "DELETE" });
       const data = await res.json();

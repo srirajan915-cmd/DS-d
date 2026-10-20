@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { X, UserPlus, Save, Sparkles, Phone, MapPin, Building, Calendar, FileText } from "lucide-react";
 import { useToast } from "@/components/providers/ToastProvider";
+import { saveDSEdit, saveDSCreated } from "@/lib/clientStore";
 
 interface DirectSeller {
   id?: string;
@@ -125,6 +126,17 @@ export function AddEditDSModal({
         setFormError(data.error || "Failed to save Direct Seller");
         setLoading(false);
         return;
+      }
+
+      const savedItem = data.item || {
+        ...formData,
+        id: sellerToEdit?.id || `ds_${Date.now()}`,
+        joiningDate: typeof formData.joiningDate === "string" ? formData.joiningDate : new Date().toISOString(),
+      };
+      if (isEditing) {
+        saveDSEdit(savedItem as any);
+      } else {
+        saveDSCreated(savedItem as any);
       }
 
       success(isEditing ? "Direct Seller updated successfully!" : "Direct Seller registered successfully!");
