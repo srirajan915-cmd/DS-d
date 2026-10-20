@@ -1,0 +1,12 @@
+{
+  "command": "node server.js",
+  "buildPath": "C:\\Users\\Sri rajan\\.gemini\\antigravity-ide\\scratch\\direct-sell-pwa",
+  "stack": "node20",
+  "env_variables": {
+    "NODE_ENV": "production",
+    "PORT": "3000",
+    "JWT_SECRET": "directsell-pro-super-secret-jwt-key-2026"
+  },
+  "memory": 512,
+  "platform": "node"
+}

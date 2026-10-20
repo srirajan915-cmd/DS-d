@@ -1,0 +1,8 @@
+{
+  "appsail": [
+    {
+      "name": "DSdashboard",
+      "source": "."
+    }
+  ]
+}
